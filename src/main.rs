@@ -26,6 +26,7 @@ fn main() -> Result<()> {
     match get_number("day", Some(0), &matches) {
         1 => day_01::run()?,
         2 => day_02::run()?,
+        3 => day_03::run()?,
         other => anyhow::bail!(format!("Invalid day: {}", other)),
     }
     Ok(())
