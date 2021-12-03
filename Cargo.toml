@@ -6,7 +6,7 @@ edition = '2018'
 
 [dependencies]
 clap = "2.33"
-itertools = "0.9"
+itertools = "0.10"
 combine = "4.4"
 anyhow = "1.0"
 pretty_env_logger = "0.4"
