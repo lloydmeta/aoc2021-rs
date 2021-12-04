@@ -10,10 +10,9 @@ pub fn run() -> Result<()> {
     println!("*** Day 4: Giant Squid ***");
     println!("Input: {}", INPUT);
     let input = parse(INPUT)?;
-    let sol_1 = sol_1(&input);
-    println!("Solution 1: {:?}\n", sol_1);
-    let sol_2 = sol_2(&input);
-    println!("Solution 2: {:?}\n", sol_2);
+    let solutions = winning_solutions(&input);
+    println!("Solution 1: {:?}\n", solutions.sol_1());
+    println!("Solution 2: {:?}\n", solutions.sol_2());
     Ok(())
 }
 
@@ -37,6 +36,17 @@ struct Hits(HashMap<usize, HashSet<usize>>);
 
 #[derive(Debug, Eq, PartialEq)]
 struct BoardIdxToHits(Vec<Hits>);
+
+struct Solutions(Vec<usize>);
+
+impl Solutions {
+    fn sol_1(&self) -> Option<usize> {
+        self.0.first().cloned()
+    }
+    fn sol_2(&self) -> Option<usize> {
+        self.0.last().cloned()
+    }
+}
 
 fn parse(s: &str) -> Result<Bingo> {
     let by_section: Vec<_> = s.split("\n\n").collect();
@@ -96,15 +106,7 @@ fn parse(s: &str) -> Result<Bingo> {
     }
 }
 
-fn sol_1(b: &Bingo) -> Option<usize> {
-    winning_solutions(b).first().copied()
-}
-
-fn sol_2(b: &Bingo) -> Option<usize> {
-    winning_solutions(b).last().copied()
-}
-
-fn winning_solutions(b: &Bingo) -> Vec<usize> {
+fn winning_solutions(b: &Bingo) -> Solutions {
     let boards_count = b.boards.len();
     let (_, _, winning_solutions) = b
         .numbers_to_draw
@@ -180,7 +182,7 @@ fn winning_solutions(b: &Bingo) -> Vec<usize> {
             },
         )
         .into_inner();
-    winning_solutions
+    Solutions(winning_solutions)
 }
 
 fn has_bingo(Hits(hit_ats): &Hits) -> bool {
@@ -275,14 +277,14 @@ mod tests {
     #[test]
     fn sol_1_test() {
         let bingo = parse(TEST_INPUT).unwrap();
-        let s = sol_1(&bingo);
+        let s = winning_solutions(&bingo).sol_1();
         assert_eq!(Some(4512), s);
     }
 
     #[test]
     fn sol_2_test() {
         let bingo = parse(TEST_INPUT).unwrap();
-        let s = sol_2(&bingo);
+        let s = winning_solutions(&bingo).sol_2();
         assert_eq!(Some(1924), s);
     }
 }
