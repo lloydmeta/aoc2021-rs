@@ -28,6 +28,7 @@ fn main() -> Result<()> {
         2 => day_02::run()?,
         3 => day_03::run()?,
         4 => day_04::run()?,
+        5 => day_05::run()?,
         other => anyhow::bail!(format!("Invalid day: {}", other)),
     }
     Ok(())
