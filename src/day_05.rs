@@ -53,18 +53,15 @@ impl Diagram {
 
 impl Display for Diagram {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let max_y = self.0.len();
-        let max_x = self.0.first().map(|r| r.len()).unwrap_or(0);
-        for y in 0..max_y {
-            for x in 0..max_x {
-                if let Some(dot) = self.0.get(x).and_then(|r| r.get(y)) {
-                    match dot {
-                        0 => write!(f, ".")?,
-                        other => write!(f, "{}", other)?,
-                    }
+        let max_row_idx = self.0.len() - 1;
+        for (row_idx, row) in self.0.iter().enumerate() {
+            for dot in row {
+                match dot {
+                    0 => write!(f, ".")?,
+                    other => write!(f, "{}", other)?,
                 }
             }
-            if y != max_y - 1 {
+            if row_idx != max_row_idx {
                 writeln!(f)?;
             }
         }
@@ -113,7 +110,7 @@ fn part_1_diagram(i: &Input) -> Diagram {
 }
 
 fn part_2_diagram(i: &Input) -> Diagram {
-    build_diagram(i, |(acc, start, end)| {
+    build_diagram(i, |(acc, Line { start, end })| {
         let is_diagonal = {
             let x_diff = start.x.max(end.x) - start.x.min(end.x);
             let y_diff = start.y.max(end.y) - start.y.min(end.y);
@@ -129,11 +126,11 @@ fn part_2_diagram(i: &Input) -> Diagram {
             let mut x = start.x;
             let mut y = start.y;
             loop {
-                acc[x][y] += 1;
+                acc[y][x] += 1;
                 x = (x as isize + x_incr) as usize;
                 y = (y as isize + y_incr) as usize;
                 if (x, y) == (end.x, end.y) {
-                    acc[x][y] += 1;
+                    acc[y][x] += 1;
                     break;
                 }
             }
@@ -144,23 +141,23 @@ fn part_2_diagram(i: &Input) -> Diagram {
 #[allow(clippy::needless_range_loop)]
 fn build_diagram<F>(i: &Input, handle_non_vert_or_horiz_line: F) -> Diagram
 where
-    F: Fn((&mut Vec<Vec<usize>>, &Point, &Point)),
+    F: Fn((&mut Vec<Vec<usize>>, &Line)),
 {
     let d = i.lines.iter().fold(
-        vec![vec![0; i.max.y + 1]; i.max.x + 1],
-        |mut acc, Line { start, end }| {
+        vec![vec![0; i.max.x + 1]; i.max.y + 1],
+        |mut acc, l @ Line { start, end }| {
             if start.x == end.x {
                 // mark column
                 for y in start.y.min(end.y)..=start.y.max(end.y) {
-                    acc[start.x][y] += 1
+                    acc[y][start.x] += 1
                 }
             } else if start.y == end.y {
                 // mark row
                 for x in start.x.min(end.x)..=start.x.max(end.x) {
-                    acc[x][start.y] += 1
+                    acc[start.y][x] += 1
                 }
             } else {
-                handle_non_vert_or_horiz_line((&mut acc, start, end));
+                handle_non_vert_or_horiz_line((&mut acc, l));
             }
             acc
         },
