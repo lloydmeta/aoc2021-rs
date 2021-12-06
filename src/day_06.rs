@@ -1,8 +1,8 @@
 use std::result::Result as StdResult;
 
 use anyhow::Result;
-use combine::*;
 use combine::parser::char::*;
+use combine::*;
 
 use crate::common::usize_parser;
 
