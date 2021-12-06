@@ -49,8 +49,8 @@ fn part_1_play(i: &Input, days_to_play: usize) -> State {
     };
     let finished_state = (0..days_to_play).fold(starting_state, |mut acc, _day| {
         let new_born_count = acc[0];
-        acc.drain(0..1);
-        acc.push(new_born_count);
+        acc.copy_within(1.., 0);
+        acc[BORN_WITH_TIMER] = new_born_count;
         acc[TIMER_AFTER_GIVING_BIRTH] += new_born_count;
         acc
     });
