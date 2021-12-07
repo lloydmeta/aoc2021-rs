@@ -73,7 +73,6 @@ mod tests {
     #[test]
     fn day_1_play_test() {
         let r = parse(TEST_INPUT).unwrap();
-        let s = part_1_play(&r, 18);
         assert_eq!(5934, part_1_play(&r, 80).count_fishes())
     }
 }
