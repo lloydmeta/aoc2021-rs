@@ -1,7 +1,3 @@
-extern crate anyhow;
-extern crate aoc_2021;
-extern crate clap;
-
 use std::fmt::Display;
 use std::str::FromStr;
 
@@ -11,7 +7,6 @@ use clap::{App, Arg, ArgMatches};
 use aoc_2021::*;
 
 fn main() -> Result<()> {
-    pretty_env_logger::init();
     let matches = App::new("Advent of Code 2021")
         .version(version().as_str())
         .about("Solutions to AoC 2021 !")
@@ -31,6 +26,7 @@ fn main() -> Result<()> {
         5 => day_05::run()?,
         6 => day_06::run()?,
         7 => day_07::run()?,
+        8 => day_08::run()?,
         other => anyhow::bail!(format!("Invalid day: {}", other)),
     }
     Ok(())
