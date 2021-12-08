@@ -289,7 +289,7 @@ impl Line {
                     .get(&C)
                     .or_else(|| ongoing_mapping.0.get(&F))
                     .cloned() // not proud of this clone...
-                    .with_context(|| "C or F mappings should be defined ")?;
+                    .with_context(|| "C or F mappings should be defined")?;
                 for (mapping_segment, possible_segments_to_map_to) in ongoing_mapping.0.iter_mut() {
                     if *mapping_segment == C || *mapping_segment == F {
                         possible_segments_to_map_to.retain(|s| segments_in_pattern.contains(s));
@@ -318,7 +318,7 @@ impl Line {
             .get(&C)
             .or_else(|| ongoing_mapping.0.get(&F))
             .cloned() // not proud of this clone...
-            .with_context(|| "C or F mappings should be defined ")?;
+            .with_context(|| "C or F mappings should be defined")?;
 
         for Segments(segments_in_pattern) in &self.patterns {
             if segments_in_pattern.len() == 5
@@ -395,17 +395,17 @@ impl Line {
             .0
             .get(&C)
             .cloned() // not proud of this clone...
-            .with_context(|| "C mappings should be defined ")?;
+            .with_context(|| "C mappings should be defined")?;
         let f_segments = ongoing_mapping
             .0
             .get(&F)
             .cloned() // not proud of this clone...
-            .with_context(|| "F mappings should be defined ")?;
+            .with_context(|| "F mappings should be defined")?;
         let g_segments = ongoing_mapping
             .0
             .get(&G)
             .cloned() // not proud of this clone...
-            .with_context(|| "G mappings should be defined ")?;
+            .with_context(|| "G mappings should be defined")?;
         if let Some(e_mappings) = ongoing_mapping.0.get_mut(&E) {
             e_mappings.retain(|e_segment| {
                 !(a_segments.contains(e_segment)
