@@ -39,7 +39,7 @@ enum Bracket {
 }
 
 impl Bracket {
-    fn points(&self) -> usize {
+    fn corrupt_line_points(&self) -> usize {
         match *self {
             Paren => 3,
             Square => 57,
@@ -61,14 +61,14 @@ impl Bracket {
 fn sol_1(i: &Input) -> usize {
     i.0.iter().fold(0, |acc, line| {
         if let Some(first_illegal) = find_first_illegal(line).1 {
-            acc + first_illegal.points()
+            acc + first_illegal.corrupt_line_points()
         } else {
             acc
         }
     })
 }
 
-fn sol_2(i: &Input) -> usize {
+fn sol_2(i: &Input) -> Option<usize> {
     let scores: Vec<_> =
         i.0.iter()
             .map(|line| {
@@ -88,7 +88,7 @@ fn sol_2(i: &Input) -> usize {
             .filter(|s| *s != 0)
             .sorted()
             .collect();
-    scores[scores.len() / 2]
+    scores.get(scores.len() / 2).cloned()
 }
 
 fn find_first_illegal(line: &[Char]) -> (Vec<&Bracket>, Option<&Bracket>) {
@@ -177,7 +177,7 @@ mod tests {
     fn sol_2_test() {
         let i = parse(TEST_INPUT).unwrap();
         let s = sol_2(&i);
-        assert_eq!(288957, s);
+        assert_eq!(Some(288957), s);
     }
 
     #[test]
