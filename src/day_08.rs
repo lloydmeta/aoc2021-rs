@@ -476,7 +476,16 @@ gcafb gcf dcaebfg ecagb gf abcdeg gaef cafbge fdbac fegbdc | fgae cfgab fg bagce
             r.0.iter()
                 .filter_map(|line| line.create_mappings().ok())
                 .collect();
-        println!("s [{:?}]", s);
+        let expected = OngoingMapping(HashMap::from_iter([
+            (A, HashSet::from_iter([D])),
+            (B, HashSet::from_iter([E])),
+            (C, HashSet::from_iter([A])),
+            (D, HashSet::from_iter([F])),
+            (E, HashSet::from_iter([G])),
+            (F, HashSet::from_iter([B])),
+            (G, HashSet::from_iter([C])),
+        ]));
+        assert_eq!(vec![expected], s);
     }
 
     #[test]
@@ -503,7 +512,8 @@ gcafb gcf dcaebfg ecagb gf abcdeg gaef cafbge fdbac fegbdc | fgae cfgab fg bagce
             r.0.iter()
                 .filter_map(|line| line.resolved_digits_number().ok())
                 .collect();
-        println!("Resolved [{:?}]", s);
+        let expected = vec![8394, 9781, 1197, 9361, 4873, 8418, 4548, 1625, 8717, 4315];
+        assert_eq!(expected, s)
     }
 
     #[test]
