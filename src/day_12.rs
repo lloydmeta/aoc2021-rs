@@ -6,6 +6,7 @@ use combine::parser::char::*;
 use combine::*;
 use itertools::Itertools;
 
+use std::iter::FromIterator;
 use Point::*;
 
 const INPUT: &str = include_str!("../data/day_12_input");
@@ -81,11 +82,12 @@ fn generate_paths(
             initial_points_from_start
                 .iter()
                 .flat_map(|point| {
+                    let visited_caves = HashMap::from_iter([(&Start, 1)]);
                     let mut reverse_paths = generate_reverse_sub_paths(
                         connections,
                         point,
                         maybe_small_cave_to_repeat,
-                        HashMap::new(),
+                        visited_caves,
                     );
                     reverse_paths.iter_mut().for_each(|path| {
                         path.push(&Start);
@@ -93,7 +95,6 @@ fn generate_paths(
                     });
                     reverse_paths // no longer reversed
                 })
-                .unique()
                 .collect()
         };
     let paths = if single_small_cave_repeat {
@@ -157,7 +158,6 @@ fn generate_reverse_sub_paths<'a>(
                 paths.iter_mut().for_each(|path| path.push(from));
                 paths
             })
-            .filter(|path| path.starts_with(&[&End]))
             .collect()
     } else {
         vec![]
