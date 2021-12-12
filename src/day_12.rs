@@ -74,7 +74,7 @@ fn parse(s: &str) -> StdResult<Input, easy::ParseError<&str>> {
 fn generate_paths(
     Input(connections): &Input,
     single_small_cave_repeat: bool,
-) -> Result<Vec<Vec<Point>>> {
+) -> Result<Vec<Vec<&Point>>> {
     let initial_points_from_start = connections.get(&Start).context("No Start point found!")?;
     let build_paths_with_maybe_small_cave_to_repeat =
         |maybe_small_cave_to_repeat: Option<&Point>| {
@@ -88,7 +88,7 @@ fn generate_paths(
                         HashMap::new(),
                     );
                     reverse_paths.iter_mut().for_each(|path| {
-                        path.push(Start);
+                        path.push(&Start);
                         path.reverse()
                     });
                     reverse_paths // no longer reversed
@@ -112,14 +112,14 @@ fn generate_paths(
     Ok(paths)
 }
 
-fn generate_reverse_sub_paths(
-    connections: &HashMap<Point, HashSet<Point>>,
-    from: &Point,
+fn generate_reverse_sub_paths<'a>(
+    connections: &'a HashMap<Point, HashSet<Point>>,
+    from: &'a Point,
     maybe_small_cave_to_repeat: Option<&Point>,
-    mut visited_small: HashMap<Point, usize>,
-) -> Vec<Vec<Point>> {
+    mut visited_small: HashMap<&'a Point, usize>,
+) -> Vec<Vec<&'a Point>> {
     if let Point::SmallCave(_) = from {
-        *visited_small.entry(from.clone()).or_insert(0) += 1;
+        *visited_small.entry(from).or_insert(0) += 1;
     }
     let maybe_next_points = connections.get(from);
     if let Some(next_points) = maybe_next_points {
@@ -143,7 +143,7 @@ fn generate_reverse_sub_paths(
             next_points_unvisited_so_far
                 .into_iter()
                 .map(|next_point| match *next_point {
-                    End => vec![vec![End]],
+                    End => vec![vec![&End]],
                     Start => vec![],
                     _ => generate_reverse_sub_paths(
                         connections,
@@ -154,10 +154,10 @@ fn generate_reverse_sub_paths(
                 });
         next_pathss
             .flat_map(|mut paths| {
-                paths.iter_mut().for_each(|path| path.push(from.clone()));
+                paths.iter_mut().for_each(|path| path.push(from));
                 paths
             })
-            .filter(|path| path.starts_with(&[End]))
+            .filter(|path| path.starts_with(&[&End]))
             .collect()
     } else {
         vec![]
