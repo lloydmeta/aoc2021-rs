@@ -45,7 +45,7 @@ impl<'a> Display for Path<'a> {
         writeln!(f, "{{")?;
         writeln!(f, "  Length: {}", self.0.len())?;
         writeln!(f, "  Path: {}", joined_s)?;
-        writeln!(f, "}}")?;
+        write!(f, "}}")?;
         Ok(())
     }
 }
