@@ -1,12 +1,12 @@
 use std::collections::*;
+use std::iter::FromIterator;
 use std::result::Result as StdResult;
 
 use anyhow::{Context, Result};
 use combine::parser::char::*;
 use combine::*;
-use itertools::Itertools;
 
-use std::iter::FromIterator;
+use std::fmt::{Display, Formatter};
 use Point::*;
 
 const INPUT: &str = include_str!("../data/day_12_input");
@@ -25,6 +25,30 @@ pub fn run() -> Result<()> {
 
 #[derive(Debug, Eq, PartialEq)]
 struct Input(HashMap<Point, HashSet<Point>>);
+
+#[derive(Debug, Eq, PartialEq)]
+struct Path<'a>(Vec<&'a Point>);
+
+impl<'a> Display for Path<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let pretty_names: Vec<_> = self
+            .0
+            .iter()
+            .map(|point| match point {
+                Point::Start => "Start",
+                Point::End => "End",
+                Point::BigCave(name) => name,
+                Point::SmallCave(name) => name,
+            })
+            .collect();
+        let joined_s = pretty_names.join(" -> ");
+        writeln!(f, "{{")?;
+        writeln!(f, "  Length: {}", self.0.len())?;
+        writeln!(f, "  Path: {}", joined_s)?;
+        writeln!(f, "}}")?;
+        Ok(())
+    }
+}
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 enum Point {
@@ -75,90 +99,83 @@ fn parse(s: &str) -> StdResult<Input, easy::ParseError<&str>> {
 fn generate_paths(
     Input(connections): &Input,
     single_small_cave_repeat: bool,
-) -> Result<Vec<Vec<&Point>>> {
+) -> Result<Vec<Path<'_>>> {
     let initial_points_from_start = connections.get(&Start).context("No Start point found!")?;
-    let build_paths_with_maybe_small_cave_to_repeat =
-        |maybe_small_cave_to_repeat: Option<&Point>| {
-            initial_points_from_start
-                .iter()
-                .flat_map(|point| {
-                    let visited_caves = HashMap::from_iter([(&Start, 1)]);
-                    let mut reverse_paths = generate_reverse_sub_paths(
-                        connections,
-                        point,
-                        maybe_small_cave_to_repeat,
-                        visited_caves,
-                    );
-                    reverse_paths.iter_mut().for_each(|path| {
-                        path.push(&Start);
-                        path.reverse()
-                    });
-                    reverse_paths // no longer reversed
-                })
-                .collect()
-        };
-    let paths = if single_small_cave_repeat {
-        let small_caves = connections
-            .keys()
-            .filter(|p| matches!(p, Point::SmallCave(_)));
-        small_caves
-            .flat_map(|small_cave_to_repeat| {
-                build_paths_with_maybe_small_cave_to_repeat(Some(small_cave_to_repeat))
-            })
-            .unique()
-            .collect()
-    } else {
-        build_paths_with_maybe_small_cave_to_repeat(None)
-    };
+    let paths = initial_points_from_start
+        .iter()
+        .flat_map(|point| {
+            let mut visited_caves = HashMap::from_iter([(&Start, 1)]);
+            let mut reverse_paths = generate_reverse_sub_paths(
+                connections,
+                point,
+                single_small_cave_repeat,
+                &mut visited_caves,
+            );
+            reverse_paths.iter_mut().for_each(|path| {
+                path.push(&Start);
+                path.reverse()
+            });
+            reverse_paths // no longer reversed
+        })
+        .map(Path)
+        .collect();
     Ok(paths)
 }
 
 fn generate_reverse_sub_paths<'a>(
     connections: &'a HashMap<Point, HashSet<Point>>,
     from: &'a Point,
-    maybe_small_cave_to_repeat: Option<&Point>,
-    mut visited_small: HashMap<&'a Point, usize>,
+    single_small_cave_repeat: bool,
+    visited_small: &mut HashMap<&'a Point, usize>,
 ) -> Vec<Vec<&'a Point>> {
     if let Point::SmallCave(_) = from {
         *visited_small.entry(from).or_insert(0) += 1;
     }
     let maybe_next_points = connections.get(from);
     if let Some(next_points) = maybe_next_points {
-        let next_points_unvisited_so_far = next_points.iter().filter(|p| {
-            let max_visit_threshold: usize =
-                if let Some(small_point_to_repeat) = maybe_small_cave_to_repeat {
-                    if small_point_to_repeat == *p {
-                        THRESHOLD_FOR_REPEATABLE
-                    } else {
-                        1
+        let max_visit_threshold: usize = if single_small_cave_repeat {
+            let visited_small_caves_all_less_than_or_equal_1 =
+                visited_small.iter().all(|(point, count)| {
+                    match point {
+                        Point::SmallCave(_) => *count <= 1,
+                        _ => true, // ignore start
                     }
-                } else {
-                    1
-                };
-            visited_small
+                });
+            if visited_small_caves_all_less_than_or_equal_1 {
+                THRESHOLD_FOR_REPEATABLE
+            } else {
+                1
+            }
+        } else {
+            1
+        };
+        let visited_small_clone_for_iter_filter = visited_small.clone();
+        let next_points_unvisited_so_far = next_points.iter().filter(|p| {
+            visited_small_clone_for_iter_filter
                 .get(*p)
                 .map(|visited_count| *visited_count < max_visit_threshold)
                 .unwrap_or(true)
         });
-        let next_pathss =
-            next_points_unvisited_so_far
-                .into_iter()
-                .map(|next_point| match *next_point {
-                    End => vec![vec![&End]],
-                    Start => vec![],
-                    _ => generate_reverse_sub_paths(
-                        connections,
-                        next_point,
-                        maybe_small_cave_to_repeat,
-                        visited_small.clone(),
-                    ),
-                });
-        next_pathss
+        let next_pathss = next_points_unvisited_so_far.map(|next_point| match *next_point {
+            End => vec![vec![&End]],
+            Start => vec![],
+            _ => generate_reverse_sub_paths(
+                connections,
+                next_point,
+                single_small_cave_repeat,
+                visited_small,
+            ),
+        });
+        let ret = next_pathss
             .flat_map(|mut paths| {
                 paths.iter_mut().for_each(|path| path.push(from));
                 paths
             })
-            .collect()
+            .collect();
+        if let Point::SmallCave(_) = from {
+            visited_small.entry(from).and_modify(|v| *v -= 1);
+        }
+        ret
     } else {
         vec![]
     }
@@ -284,7 +301,7 @@ start-RW";
     fn generate_paths_with_small_cave_repeats_2_test() {
         let i = parse(TEST_INPUT_2).unwrap();
         let r = generate_paths(&i, true).unwrap();
-        assert_eq!(103, r.len())
+        assert_eq!(103, r.len());
     }
 
     #[test]
