@@ -24,10 +24,10 @@ pub fn run() -> Result<()> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-struct Input(HashMap<Point, HashSet<Point>>);
+pub struct Input(HashMap<Point, HashSet<Point>>);
 
 #[derive(Debug, Eq, PartialEq)]
-struct Path<'a>(Vec<&'a Point>);
+pub struct Path<'a>(Vec<&'a Point>);
 
 impl<'a> Display for Path<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -51,14 +51,14 @@ impl<'a> Display for Path<'a> {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
-enum Point {
+pub enum Point {
     Start,
     BigCave(String),
     SmallCave(String),
     End,
 }
 
-fn parse(s: &str) -> StdResult<Input, easy::ParseError<&str>> {
+pub fn parse(s: &str) -> StdResult<Input, easy::ParseError<&str>> {
     macro_rules! point_parser {
         () => {
             many1(letter()).map(|s: String| {
@@ -96,7 +96,7 @@ fn parse(s: &str) -> StdResult<Input, easy::ParseError<&str>> {
     Ok(r)
 }
 
-fn generate_paths(
+pub fn generate_paths(
     Input(connections): &Input,
     single_small_cave_repeat: bool,
 ) -> Result<Vec<Path<'_>>> {

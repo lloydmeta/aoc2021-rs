@@ -10,7 +10,9 @@ itertools = "0.10"
 combine = "4.4"
 anyhow = "1.0"
 
-[profile.release]
-opt-level = 3
-debug = false
-lto = true
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "benches"
+harness = false
