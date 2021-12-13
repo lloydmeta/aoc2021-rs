@@ -9,7 +9,7 @@ use combine::*;
 use std::fmt::{Display, Formatter};
 use Point::*;
 
-const INPUT: &str = include_str!("../data/day_12_input");
+pub const INPUT: &str = include_str!("../data/day_12_input");
 const THRESHOLD_FOR_REPEATABLE: usize = 2;
 
 pub fn run() -> Result<()> {
