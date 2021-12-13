@@ -45,7 +45,7 @@ impl<'a> Display for Path<'a> {
         writeln!(f, "{{")?;
         writeln!(f, "  Length: {}", self.0.len())?;
         writeln!(f, "  Path: {}", joined_s)?;
-        writeln!(f, "}}")?;
+        write!(f, "}}")?;
         Ok(())
     }
 }
@@ -149,22 +149,26 @@ fn generate_reverse_sub_paths<'a>(
         } else {
             1
         };
-        let visited_small_clone_for_iter_filter = visited_small.clone();
-        let next_points_unvisited_so_far = next_points.iter().filter(|p| {
-            visited_small_clone_for_iter_filter
-                .get(*p)
+        let next_pathss = next_points.iter().filter_map(|next_point| {
+            let should_run_next_point = visited_small
+                .get(next_point)
                 .map(|visited_count| *visited_count < max_visit_threshold)
-                .unwrap_or(true)
-        });
-        let next_pathss = next_points_unvisited_so_far.map(|next_point| match *next_point {
-            End => vec![vec![&End]],
-            Start => vec![],
-            _ => generate_reverse_sub_paths(
-                connections,
-                next_point,
-                single_small_cave_repeat,
-                visited_small,
-            ),
+                .unwrap_or(true);
+            if should_run_next_point {
+                let next_pathss = match *next_point {
+                    End => vec![vec![&End]],
+                    Start => vec![],
+                    _ => generate_reverse_sub_paths(
+                        connections,
+                        next_point,
+                        single_small_cave_repeat,
+                        visited_small,
+                    ),
+                };
+                Some(next_pathss)
+            } else {
+                None
+            }
         });
         let ret = next_pathss
             .flat_map(|mut paths| {
