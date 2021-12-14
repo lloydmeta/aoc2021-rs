@@ -13,7 +13,7 @@ fn day_13_part_2(i: &day_13::Input) -> usize {
 }
 
 fn day_14_part_2(i: &day_14::Input) -> usize {
-    day_14::approximate_max_minus_least_after_steps(i, 40).unwrap_or(0)
+    i.max_minus_least_after_steps(40).unwrap_or(0)
 }
 
 fn criterion_benchmark(c: &mut Criterion) {

@@ -7,15 +7,17 @@ use combine::*;
 
 pub const INPUT: &str = include_str!("../data/day_14_input");
 
+const DUMMY_CHAR: char = '!';
+
 pub fn run() -> Result<()> {
     println!("*** Day 14: Extended Polymerization ***");
     println!("Input: {}", INPUT);
     let input = parse(INPUT)?;
 
-    let sol_1 = approximate_max_minus_least_after_steps(&input, 10);
+    let sol_1 = input.max_minus_least_after_steps(10);
     println!("Solution 1: {:?}", sol_1);
 
-    let sol_2 = approximate_max_minus_least_after_steps(&input, 40);
+    let sol_2 = input.max_minus_least_after_steps(40);
     println!("Solution 2: {:?}", sol_2);
 
     Ok(())
@@ -37,8 +39,45 @@ pub struct Pair {
 }
 
 impl Input {
-    fn step(&self, times: usize) -> HashMap<Pair, usize> {
-        let init_pair_counts =
+    pub fn max_minus_least_after_steps(&self, steps: usize) -> Option<usize> {
+        let pairs_to_counts = self.pair_wise_counts(steps);
+        let chars_to_double_counts = pairs_to_counts.iter().fold(
+            HashMap::new(),
+            |mut acc, (Pair { first, second }, count)| {
+                *acc.entry(first).or_insert(0) += count;
+                *acc.entry(second).or_insert(0) += count;
+                acc
+            },
+        );
+        let maybe_least_most = chars_to_double_counts
+            .iter()
+            .filter_map(|(c, double_count)| {
+                if **c != DUMMY_CHAR {
+                    Some((c, double_count / 2))
+                } else {
+                    None
+                }
+            })
+            .fold(None, |acc, (c, count)| {
+                acc.map(|((least_char, least_count), (most_char, most_count))| {
+                    if count < least_count {
+                        ((c, count), (most_char, most_count))
+                    } else if count > most_count {
+                        ((least_char, least_count), (c, count))
+                    } else {
+                        ((least_char, least_count), (most_char, most_count))
+                    }
+                })
+                .or(Some(((c, count), (c, count))))
+            });
+        // ABA -> _A, AB, BA, A_ -> A:4, B: 2 -> a:2 , b:1
+        maybe_least_most.map(|((_least_char, least_count), (_most_char, most_count))| {
+            most_count - least_count + 1
+        })
+    }
+
+    fn pair_wise_counts(&self, times: usize) -> HashMap<Pair, usize> {
+        let mut init_pair_counts =
             self.template
                 .0
                 .as_slice()
@@ -50,6 +89,21 @@ impl Input {
                     *acc.entry(pair).or_insert(0) += 1;
                     acc
                 });
+        // insert first *and* last dummy pair while stepping so we can divide by two evenly
+        if let Some(first_char) = self.template.0.first() {
+            let pair = Pair {
+                first: DUMMY_CHAR,
+                second: *first_char,
+            };
+            *init_pair_counts.entry(pair).or_insert(0) += 1;
+        }
+        if let Some(last_char) = self.template.0.last() {
+            let pair = Pair {
+                first: *last_char,
+                second: DUMMY_CHAR,
+            };
+            *init_pair_counts.entry(pair).or_insert(0) += 1;
+        }
 
         (0..times).fold(init_pair_counts, |previous_acc, _time| {
             previous_acc.iter().fold(
@@ -73,37 +127,6 @@ impl Input {
             )
         })
     }
-}
-
-pub fn approximate_max_minus_least_after_steps(i: &Input, steps: usize) -> Option<usize> {
-    let pairs_to_counts = i.step(steps);
-    // Since we're counting into pairs, *on average*, each letter gets counted twice; for instance
-    // in the sequence, ABA the pairs are AB and BA; so the following would give A -> 2, B->2;
-    // but B only occurs once; A actually _does_ occur twice instead of once, but this overall
-    // gets averaged out even for `times` as 10 and initial template as short as 4...
-    let chars_to_double_counts = pairs_to_counts.iter().fold(
-        HashMap::new(),
-        |mut acc, (Pair { first, second }, count)| {
-            *acc.entry(first).or_insert(0) += count;
-            *acc.entry(second).or_insert(0) += count;
-            acc
-        },
-    );
-    let maybe_least_most = chars_to_double_counts.iter().fold(None, |acc, (c, count)| {
-        acc.map(|((least_char, least_count), (most_char, most_count))| {
-            if count < least_count {
-                ((c, count), (most_char, most_count))
-            } else if count > most_count {
-                ((least_char, least_count), (c, count))
-            } else {
-                ((least_char, least_count), (most_char, most_count))
-            }
-        })
-        .or(Some(((c, count), (c, count))))
-    });
-    maybe_least_most.map(|((_least_char, least_count), (_most_char, most_count))| {
-        ((*most_count as f64 - *least_count as f64) / 2f64).ceil() as usize
-    })
 }
 
 pub fn parse(s: &str) -> StdResult<Input, easy::ParseError<&str>> {
@@ -152,21 +175,21 @@ CN -> C";
     #[test]
     fn sol_1_test() {
         let i = parse(TEST_INPUT).unwrap();
-        let r = approximate_max_minus_least_after_steps(&i, 10).unwrap();
+        let r = i.max_minus_least_after_steps(10).unwrap();
         assert_eq!(1588, r)
     }
 
     #[test]
     fn part_1_test() {
         let i = parse(INPUT).unwrap();
-        let r = approximate_max_minus_least_after_steps(&i, 10).unwrap();
+        let r = i.max_minus_least_after_steps(10).unwrap();
         assert_eq!(2587, r)
     }
 
     #[test]
     fn part_2_test() {
         let i = parse(INPUT).unwrap();
-        let r = approximate_max_minus_least_after_steps(&i, 40).unwrap();
+        let r = i.max_minus_least_after_steps(40).unwrap();
         assert_eq!(3318837563123, r)
     }
 
