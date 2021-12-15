@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::BinaryHeap;
 use std::result::Result as StdResult;
 
 use anyhow::Result;
@@ -33,8 +33,11 @@ pub struct Input {
 #[derive(Copy, Clone, Eq, PartialEq)]
 struct RiskToPosition {
     risk: usize,
-    coords: Coords,
+    coords_idx: CoordsIdx,
 }
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+struct CoordsIdx(usize);
 
 // The priority queue depends on `Ord`.
 // Explicitly implement the trait so the queue becomes a min-heap
@@ -47,7 +50,7 @@ impl Ord for RiskToPosition {
         other
             .risk
             .cmp(&self.risk)
-            .then_with(|| self.coords.cmp(&other.coords))
+            .then_with(|| self.coords_idx.cmp(&other.coords_idx))
     }
 }
 
@@ -62,31 +65,30 @@ impl Input {
     pub fn lowest_risk_to_end(&self) -> Option<usize> {
         // Read the docs for BinaryHeap :p
         let start = Coords { row: 0, col: 0 };
+        let start_coords_idx = self.to_coords_idx(start);
         let end = self.max_coords;
 
-        // risk_from_start[coords] = current lowest risk from `start` to `coords`
-        let mut risk_from_start: HashMap<Coords, usize> =
-            HashMap::with_capacity((self.max_coords.row + 1) * (self.max_coords.col + 1));
+        // risk_from_start[coords_idx] = current lowest risk from `start` to `coords`
+        let mut risk_from_start: Vec<usize> =
+            vec![UNEXPLORED_RISK; (self.max_coords.row + 1) * (self.max_coords.col + 1)];
 
         let mut to_visit_prioritised_q = BinaryHeap::new();
 
         // We're at `start`, with a zero risk
-        risk_from_start.insert(start, 0);
+        risk_from_start[start_coords_idx.0] = 0;
         to_visit_prioritised_q.push(RiskToPosition {
             risk: 0,
-            coords: start,
+            coords_idx: self.to_coords_idx(start),
         });
 
         // Examine the frontier with lower risk positions first
-        while let Some(RiskToPosition { risk, coords }) = to_visit_prioritised_q.pop() {
+        while let Some(RiskToPosition { risk, coords_idx }) = to_visit_prioritised_q.pop() {
             // Done; just exit
+            let coords = self.to_coords(coords_idx);
             if coords == end {
                 return Some(risk);
             } else {
-                let known_lowest_risk_to_current = risk_from_start
-                    .get(&coords)
-                    .copied()
-                    .unwrap_or(UNEXPLORED_RISK);
+                let known_lowest_risk_to_current = risk_from_start[coords_idx.0];
                 if risk > known_lowest_risk_to_current {
                     // Skip exploring this path; we already know of a less risky way of getting here
                     continue;
@@ -94,16 +96,17 @@ impl Input {
                     // For each coords we can reach, see if we can find a way with
                     // a lower risk going through some new coords
                     for adjacent in self.adjacents(&coords) {
+                        let adjacent_coords_idx = self.to_coords_idx(adjacent);
                         let current_known_lowest_risk_to_adjacent =
-                            risk_from_start.entry(adjacent).or_insert(UNEXPLORED_RISK);
+                            risk_from_start[adjacent_coords_idx.0];
                         let next_tally = RiskToPosition {
                             risk: risk + self.rows[adjacent.row][adjacent.col],
-                            coords: adjacent,
+                            coords_idx: adjacent_coords_idx,
                         };
                         // If so, add it to the frontier and continue
-                        if next_tally.risk < *current_known_lowest_risk_to_adjacent {
+                        if next_tally.risk < current_known_lowest_risk_to_adjacent {
                             to_visit_prioritised_q.push(next_tally);
-                            *current_known_lowest_risk_to_adjacent = next_tally.risk;
+                            risk_from_start[adjacent_coords_idx.0] = next_tally.risk;
                         }
                     }
                 }
@@ -143,6 +146,17 @@ impl Input {
         }
     }
 
+    fn to_coords_idx(&self, Coords { row, col }: Coords) -> CoordsIdx {
+        let idx = row * (self.max_coords.col + 1) + col;
+        CoordsIdx(idx)
+    }
+
+    fn to_coords(&self, CoordsIdx(idx): CoordsIdx) -> Coords {
+        let row = idx / (self.max_coords.col + 1);
+        let col = idx % (self.max_coords.col + 1);
+        Coords { row, col }
+    }
+
     fn adjacents(&self, Coords { row, col }: &Coords) -> Vec<Coords> {
         let row_i = *row as isize;
         let col_i = *col as isize;
@@ -171,7 +185,7 @@ impl Input {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Ord, PartialOrd)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Ord, PartialOrd)]
 pub struct Coords {
     row: usize,
     col: usize,
@@ -226,6 +240,20 @@ mod tests {
         let expanded = i.expand(5);
         let r = expanded.lowest_risk_to_end();
         assert_eq!(Some(315), r);
+    }
+
+    #[test]
+    fn to_coords_ix_test() {
+        let i = parse(TEST_INPUT).unwrap();
+        let idx = i.to_coords_idx(Coords { row: 1, col: 0 });
+        assert_eq!(CoordsIdx(10), idx);
+    }
+
+    #[test]
+    fn to_coords_test() {
+        let i = parse(TEST_INPUT).unwrap();
+        let coords = i.to_coords(CoordsIdx(13));
+        assert_eq!(Coords { row: 1, col: 3 }, coords);
     }
 
     #[test]
