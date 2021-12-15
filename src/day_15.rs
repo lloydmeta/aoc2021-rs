@@ -1,6 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::BinaryHeap;
-use std::collections::HashMap;
+use std::collections::{BinaryHeap, HashMap};
 use std::result::Result as StdResult;
 
 use anyhow::Result;
@@ -65,14 +64,14 @@ impl Input {
         let start = Coords { row: 0, col: 0 };
         let end = self.max_coords;
 
-        // distances_from_start[coords] = current shortest distance from `start` to `coords`
-        let mut distances_from_start: HashMap<Coords, usize> =
+        // risk_from_start[coords] = current lowest risk from `start` to `coords`
+        let mut risk_from_start: HashMap<Coords, usize> =
             HashMap::with_capacity((self.max_coords.row + 1) * (self.max_coords.col + 1));
 
         let mut to_visit_prioritised_q = BinaryHeap::new();
 
         // We're at `start`, with a zero risk
-        distances_from_start.insert(start, 0);
+        risk_from_start.insert(start, 0);
         to_visit_prioritised_q.push(RiskToPosition {
             risk: 0,
             coords: start,
@@ -84,7 +83,7 @@ impl Input {
             if coords == end {
                 return Some(risk);
             } else {
-                let known_lowest_risk_to_current = distances_from_start
+                let known_lowest_risk_to_current = risk_from_start
                     .get(&coords)
                     .copied()
                     .unwrap_or(UNEXPLORED_RISK);
@@ -95,9 +94,8 @@ impl Input {
                     // For each coords we can reach, see if we can find a way with
                     // a lower risk going through some new coords
                     for adjacent in self.adjacents(&coords) {
-                        let current_known_lowest_risk_to_adjacent = distances_from_start
-                            .entry(adjacent)
-                            .or_insert(UNEXPLORED_RISK);
+                        let current_known_lowest_risk_to_adjacent =
+                            risk_from_start.entry(adjacent).or_insert(UNEXPLORED_RISK);
                         let next_tally = RiskToPosition {
                             risk: risk + self.rows[adjacent.row][adjacent.col],
                             coords: adjacent,
@@ -117,31 +115,24 @@ impl Input {
     }
 
     pub fn expand(&self, expand_factor: usize) -> Input {
-        let expanded_rows: Vec<_> = (0..expand_factor)
-            .flat_map(|row_copy_idx| {
-                let expanded_rows: Vec<_> = self
-                    .rows
-                    .iter()
-                    .map(|row| {
-                        (0..expand_factor)
-                            .flat_map(|col_copy_idx| {
-                                row.iter()
-                                    .map(|v| {
-                                        let next_value = v + col_copy_idx + row_copy_idx;
-                                        if next_value > 9 {
-                                            next_value % 9
-                                        } else {
-                                            next_value
-                                        }
-                                    })
-                                    .collect::<Vec<_>>()
+        let expanded_rows = (0..expand_factor)
+            .flat_map(|row_exp_idx| {
+                self.rows.iter().map(move |row| {
+                    (0..expand_factor)
+                        .flat_map(move |col_exp_idx| {
+                            row.iter().map(move |v| {
+                                let next_value = v + col_exp_idx + row_exp_idx;
+                                if next_value > 9 {
+                                    next_value % 9
+                                } else {
+                                    next_value
+                                }
                             })
-                            .collect::<Vec<usize>>()
-                    })
-                    .collect();
-                expanded_rows
+                        })
+                        .collect::<Vec<_>>()
+                })
             })
-            .collect();
+            .collect::<Vec<Vec<_>>>();
         let expanded_max_coords = Coords {
             row: (self.max_coords.row + 1) * expand_factor - 1,
             col: (self.max_coords.col + 1) * expand_factor - 1,
