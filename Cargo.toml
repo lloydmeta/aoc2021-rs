@@ -5,9 +5,9 @@ authors = ["lloydmeta <lloydmeta@gmail.com>"]
 edition = '2018'
 
 [dependencies]
-clap = "2.33"
+clap = "2.34"
 itertools = "0.10"
-combine = "4.4"
+combine = "4.6"
 anyhow = "1.0"
 
 [dev-dependencies]

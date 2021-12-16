@@ -138,23 +138,32 @@ impl DecodedPacket {
                         let r = if first.run()? > second.run()? { 1 } else { 0 };
                         Ok(r)
                     }
-                    _ => bail!("Did not have 2 sub-packets"),
+                    _ => bail!(
+                        "Did not have 2 sub-packets for packet type [{}]",
+                        packet_type
+                    ),
                 },
                 6 => match (packets.get(0), packets.get(1)) {
                     (Some(first), Some(second)) => {
                         let r = if first.run()? < second.run()? { 1 } else { 0 };
                         Ok(r)
                     }
-                    _ => bail!("Did not have 2 sub-packets"),
+                    _ => bail!(
+                        "Did not have 2 sub-packets for packet type [{}]",
+                        packet_type
+                    ),
                 },
                 7 => match (packets.get(0), packets.get(1)) {
                     (Some(first), Some(second)) => {
                         let r = if first.run()? == second.run()? { 1 } else { 0 };
                         Ok(r)
                     }
-                    _ => bail!("Did not have 2 sub-packets"),
+                    _ => bail!(
+                        "Did not have 2 sub-packets for packet type [{}]",
+                        packet_type
+                    ),
                 },
-                _ => unimplemented!(),
+                other => bail!("Unsupported packet type [{}]", other),
             }
         }
 
@@ -186,9 +195,16 @@ impl Packet {
         // keep skipping bits until we reach something that can be interpreted as headers
 
         for skipped_bits in 0..packet_length {
-            let packet = &bits[skipped_bits..];
-            let version_bits = &packet[0..3];
-            let type_bits = &packet[3..6];
+            let packet = bits.get(skipped_bits..).context(format!(
+                "No packets could be retrieved from offset [{}]",
+                skipped_bits
+            ))?;
+            let version_bits = &packet
+                .get(0..3)
+                .context("Could not retrieve version bits")?;
+            let type_bits = &packet
+                .get(3..6)
+                .context("Could not retrieve packet type bits")?;
             let header_bit_count = 6;
 
             let packet_version_result = to_decimal(version_bits);
@@ -201,7 +217,11 @@ impl Packet {
                     4 => {
                         // Literal
                         let mut bits_buffer = vec![];
-                        for c in packet[6..].chunks_exact(5) {
+                        for c in packet
+                            .get(6..)
+                            .context("Could not get number bits")?
+                            .chunks_exact(5)
+                        {
                             bits_buffer.extend_from_slice(&c[1..]);
                             if c[0] == 0 {
                                 break;
@@ -219,7 +239,9 @@ impl Packet {
                     }
                     _ => {
                         // Operator
-                        let length_type = &packet[6];
+                        let length_type = &packet
+                            .get(6)
+                            .context("Could not retrieve length type bit for operator")?;
                         let bits_used_so_far = skipped_bits + header_bit_count + 1;
 
                         fn decode_inner_bits<F>(
@@ -233,31 +255,35 @@ impl Packet {
                             let mut sub_packet_skip = 0;
 
                             loop {
-                                let inner_packet = &sub_packet_bits[sub_packet_skip..];
+                                let inner_packet_bits =
+                                    sub_packet_bits.get(sub_packet_skip..).context(format!(
+                                        "Could not get sub packet bits from offset [{}]",
+                                        sub_packet_skip
+                                    ))?;
 
-                                let interpreted_inner = Packet::decode_bits(inner_packet)?;
+                                let decoded_inner_packet = Packet::decode_bits(inner_packet_bits)?;
 
-                                match interpreted_inner {
+                                match decoded_inner_packet {
                                     DecodedPacket::Literal {
                                         bits_from_packet_used,
                                         ..
                                     } => {
                                         sub_packet_skip += bits_from_packet_used;
-                                        sub_packets.push(interpreted_inner);
+                                        sub_packets.push(decoded_inner_packet);
                                     }
                                     DecodedPacket::OperatorType0 {
                                         bits_from_packet_used,
                                         ..
                                     } => {
                                         sub_packet_skip += bits_from_packet_used;
-                                        sub_packets.push(interpreted_inner);
+                                        sub_packets.push(decoded_inner_packet);
                                     }
                                     DecodedPacket::OperatorType1 {
                                         bits_from_packet_used,
                                         ..
                                     } => {
                                         sub_packet_skip += bits_from_packet_used;
-                                        sub_packets.push(interpreted_inner);
+                                        sub_packets.push(decoded_inner_packet);
                                     }
                                     DecodedPacket::End => {
                                         break;
@@ -274,10 +300,15 @@ impl Packet {
 
                         match length_type {
                             0 => {
-                                let length_bits = &packet[7..22];
+                                let length_bits = &packet.get(7..22).context(
+                                    "Format could not get length type bits for OpType 0",
+                                )?;
                                 let sub_packet_bit_length = to_decimal(length_bits)?;
 
-                                let sub_packet_bits = &packet[22..22 + sub_packet_bit_length];
+                                let sub_packet_bits =
+                                    &packet
+                                        .get(22..22 + sub_packet_bit_length)
+                                        .context("Could not get sub packet bits for OptType 0")?;
                                 let bits_from_packet_used =
                                     bits_used_so_far + 15 + sub_packet_bit_length;
 
@@ -292,11 +323,15 @@ impl Packet {
                                 });
                             }
                             1 => {
-                                let sub_packet_count_bits = &packet[7..18];
+                                let sub_packet_count_bits = packet
+                                    .get(7..18)
+                                    .context("Could not get sub packet count bits for OpType 1")?;
                                 let sub_packet_count = to_decimal(sub_packet_count_bits)?;
 
                                 let op_type_1_bits_used_so_far = bits_used_so_far + 11;
-                                let sub_packet_bits = &packet[op_type_1_bits_used_so_far..];
+                                let sub_packet_bits = packet
+                                    .get(op_type_1_bits_used_so_far..)
+                                    .context("Could not get sub packet bits for OpType 1")?;
 
                                 let (sub_packets, sub_packet_skip) =
                                     decode_inner_bits(sub_packet_bits, |sub_packets| {
@@ -314,7 +349,7 @@ impl Packet {
                                     sub_packets,
                                 });
                             }
-                            _ => bail!("Unsupported packet type"),
+                            other => bail!("Unsupported packet type [{}]", other),
                         }
                     }
                 }
@@ -333,7 +368,11 @@ fn to_decimal(bits: &[u8]) -> Result<usize> {
         if *next == 1 || *next == 0 {
             acc += *next as usize * (2usize.pow(idx as u32));
         } else {
-            bail!("Nope, invalid")
+            bail!(
+                "Nope, invalid bit [{}] at position [{}] from right",
+                next,
+                idx
+            )
         }
     }
     Ok(acc)
