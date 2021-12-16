@@ -95,82 +95,82 @@ impl DecodedPacket {
     }
 
     pub fn run(&self) -> Result<usize> {
+        fn run_many(packet_type: usize, packets: &[DecodedPacket]) -> Result<usize> {
+            match packet_type {
+                0 => {
+                    let mut acc = 0;
+                    for packet in packets {
+                        acc += packet.run()?;
+                    }
+                    Ok(acc)
+                }
+                1 => {
+                    let mut acc = 1;
+                    for packet in packets {
+                        acc *= packet.run()?;
+                    }
+                    Ok(acc)
+                }
+                2 => {
+                    let mut lowest_result = None;
+                    for packet in packets {
+                        let r = packet.run()?;
+                        match lowest_result {
+                            Some(curr) if curr < r => (),
+                            _ => lowest_result = Some(r),
+                        }
+                    }
+                    lowest_result.context("No packets exist")
+                }
+                3 => {
+                    let mut lowest_result = None;
+                    for packet in packets {
+                        let r = packet.run()?;
+                        match lowest_result {
+                            Some(curr) if curr > r => (),
+                            _ => lowest_result = Some(r),
+                        }
+                    }
+                    lowest_result.context("No packets exist")
+                }
+                5 => match (packets.get(0), packets.get(1)) {
+                    (Some(first), Some(second)) => {
+                        let r = if first.run()? > second.run()? { 1 } else { 0 };
+                        Ok(r)
+                    }
+                    _ => bail!("Did not have 2 sub-packets"),
+                },
+                6 => match (packets.get(0), packets.get(1)) {
+                    (Some(first), Some(second)) => {
+                        let r = if first.run()? < second.run()? { 1 } else { 0 };
+                        Ok(r)
+                    }
+                    _ => bail!("Did not have 2 sub-packets"),
+                },
+                7 => match (packets.get(0), packets.get(1)) {
+                    (Some(first), Some(second)) => {
+                        let r = if first.run()? == second.run()? { 1 } else { 0 };
+                        Ok(r)
+                    }
+                    _ => bail!("Did not have 2 sub-packets"),
+                },
+                _ => unimplemented!(),
+            }
+        }
+
         match self {
             Literal { number, .. } => Ok(*number),
             OperatorType0 {
                 packet_type,
                 sub_packets,
                 ..
-            } => Self::run_many(*packet_type, sub_packets),
+            } => run_many(*packet_type, sub_packets),
             OperatorType1 {
                 packet_type,
                 sub_packets,
                 ..
-            } => Self::run_many(*packet_type, sub_packets),
+            } => run_many(*packet_type, sub_packets),
             End => bail!("No result for end..."),
-        }
-    }
-
-    fn run_many(packet_type: usize, packets: &[DecodedPacket]) -> Result<usize> {
-        match packet_type {
-            0 => {
-                let mut acc = 0;
-                for packet in packets {
-                    acc += packet.run()?;
-                }
-                Ok(acc)
-            }
-            1 => {
-                let mut acc = 1;
-                for packet in packets {
-                    acc *= packet.run()?;
-                }
-                Ok(acc)
-            }
-            2 => {
-                let mut lowest_result = None;
-                for packet in packets {
-                    let r = packet.run()?;
-                    match lowest_result {
-                        Some(curr) if curr < r => (),
-                        _ => lowest_result = Some(r),
-                    }
-                }
-                lowest_result.context("No packets exist")
-            }
-            3 => {
-                let mut lowest_result = None;
-                for packet in packets {
-                    let r = packet.run()?;
-                    match lowest_result {
-                        Some(curr) if curr > r => (),
-                        _ => lowest_result = Some(r),
-                    }
-                }
-                lowest_result.context("No packets exist")
-            }
-            5 => match (packets.get(0), packets.get(1)) {
-                (Some(first), Some(second)) => {
-                    let r = if first.run()? > second.run()? { 1 } else { 0 };
-                    Ok(r)
-                }
-                _ => bail!("Did not have 2 sub-packets"),
-            },
-            6 => match (packets.get(0), packets.get(1)) {
-                (Some(first), Some(second)) => {
-                    let r = if first.run()? < second.run()? { 1 } else { 0 };
-                    Ok(r)
-                }
-                _ => bail!("Did not have 2 sub-packets"),
-            },
-            7 => match (packets.get(0), packets.get(1)) {
-                (Some(first), Some(second)) => {
-                    let r = if first.run()? == second.run()? { 1 } else { 0 };
-                    Ok(r)
-                }
-                _ => bail!("Did not have 2 sub-packets"),
-            },
-            _ => unimplemented!(),
         }
     }
 }
@@ -217,51 +217,69 @@ impl Packet {
                         // Operator
                         let length_type = &packet[6];
                         let bits_used_so_far = skipped_bits + header_bit_count + 1;
+
+                        fn decode_inner_bits<F>(
+                            sub_packet_bits: &[u8],
+                            exit_loop_check: F,
+                        ) -> Result<(Vec<DecodedPacket>, usize)>
+                        where
+                            F: Fn(&[DecodedPacket]) -> bool,
+                        {
+                            let mut sub_packets = vec![];
+                            let mut sub_packet_skip = 0;
+
+                            loop {
+                                let inner_packet =
+                                    Packet(sub_packet_bits[sub_packet_skip..].to_vec());
+
+                                let interpreted_inner = inner_packet.decode()?;
+
+                                match interpreted_inner {
+                                    DecodedPacket::Literal {
+                                        bits_from_packet_used,
+                                        ..
+                                    } => {
+                                        sub_packet_skip += bits_from_packet_used;
+                                        sub_packets.push(interpreted_inner);
+                                    }
+                                    DecodedPacket::OperatorType0 {
+                                        bits_from_packet_used,
+                                        ..
+                                    } => {
+                                        sub_packet_skip += bits_from_packet_used;
+                                        sub_packets.push(interpreted_inner);
+                                    }
+                                    DecodedPacket::OperatorType1 {
+                                        bits_from_packet_used,
+                                        ..
+                                    } => {
+                                        sub_packet_skip += bits_from_packet_used;
+                                        sub_packets.push(interpreted_inner);
+                                    }
+                                    DecodedPacket::End => {
+                                        break;
+                                    }
+                                }
+
+                                if exit_loop_check(&sub_packets) {
+                                    break;
+                                }
+                            }
+
+                            Ok((sub_packets, sub_packet_skip))
+                        }
+
                         match length_type {
                             0 => {
                                 let length_bits = &packet[7..22];
                                 let sub_packet_bit_length = to_decimal(length_bits)?;
-                                let sub_packet_bits = &packet[22..22 + sub_packet_bit_length];
 
-                                let mut sub_packets = vec![];
-                                let mut sub_packet_skip = 0;
+                                let sub_packet_bits = &packet[22..22 + sub_packet_bit_length];
                                 let bits_from_packet_used =
                                     bits_used_so_far + 15 + sub_packet_bit_length;
 
-                                loop {
-                                    let inner_packet =
-                                        Packet(sub_packet_bits[sub_packet_skip..].to_vec());
-
-                                    let interpreted_inner = inner_packet.decode()?;
-
-                                    match interpreted_inner {
-                                        DecodedPacket::Literal {
-                                            bits_from_packet_used,
-                                            ..
-                                        } => {
-                                            sub_packet_skip += bits_from_packet_used;
-                                            sub_packets.push(interpreted_inner);
-                                        }
-                                        DecodedPacket::OperatorType0 {
-                                            bits_from_packet_used,
-                                            ..
-                                        } => {
-                                            sub_packet_skip += bits_from_packet_used;
-                                            sub_packets.push(interpreted_inner);
-                                        }
-                                        DecodedPacket::OperatorType1 {
-                                            bits_from_packet_used,
-                                            ..
-                                        } => {
-                                            sub_packet_skip += bits_from_packet_used;
-                                            sub_packets.push(interpreted_inner);
-                                        }
-                                        DecodedPacket::End => {
-                                            break;
-                                        }
-                                    }
-                                }
-
+                                let (sub_packets, _) =
+                                    decode_inner_bits(sub_packet_bits, |_| false)?;
                                 return Ok(OperatorType0 {
                                     packet_version,
                                     packet_type,
@@ -274,49 +292,13 @@ impl Packet {
                                 let sub_packet_count_bits = &packet[7..18];
                                 let sub_packet_count = to_decimal(sub_packet_count_bits)?;
 
-                                let mut sub_packets = vec![];
-                                let mut sub_packet_skip = 0;
-
                                 let op_type_1_bits_used_so_far = bits_used_so_far + 11;
-
                                 let sub_packet_bits = &packet[op_type_1_bits_used_so_far..];
 
-                                loop {
-                                    let inner_packet =
-                                        Packet(sub_packet_bits[sub_packet_skip..].to_vec());
-                                    let interpreted_inner = inner_packet.decode()?;
-
-                                    match interpreted_inner {
-                                        DecodedPacket::Literal {
-                                            bits_from_packet_used,
-                                            ..
-                                        } => {
-                                            sub_packet_skip += bits_from_packet_used;
-                                            sub_packets.push(interpreted_inner);
-                                        }
-                                        DecodedPacket::OperatorType0 {
-                                            bits_from_packet_used,
-                                            ..
-                                        } => {
-                                            sub_packet_skip += bits_from_packet_used;
-                                            sub_packets.push(interpreted_inner);
-                                        }
-                                        DecodedPacket::OperatorType1 {
-                                            bits_from_packet_used,
-                                            ..
-                                        } => {
-                                            sub_packet_skip += bits_from_packet_used;
-                                            sub_packets.push(interpreted_inner);
-                                        }
-                                        DecodedPacket::End => {
-                                            break;
-                                        }
-                                    }
-
-                                    if sub_packets.len() == sub_packet_count {
-                                        break;
-                                    }
-                                }
+                                let (sub_packets, sub_packet_skip) =
+                                    decode_inner_bits(sub_packet_bits, |sub_packets| {
+                                        sub_packets.len() == sub_packet_count
+                                    })?;
 
                                 let bits_from_packet_used =
                                     op_type_1_bits_used_so_far + sub_packet_skip;
