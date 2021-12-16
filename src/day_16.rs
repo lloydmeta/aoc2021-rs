@@ -177,12 +177,16 @@ impl DecodedPacket {
 
 impl Packet {
     pub fn decode(&self) -> Result<DecodedPacket> {
-        let packet_length = &self.0.len();
+        Self::decode_bits(&self.0)
+    }
+
+    fn decode_bits(bits: &[u8]) -> Result<DecodedPacket> {
+        let packet_length = bits.len();
 
         // keep skipping bits until we reach something that can be interpreted as headers
 
-        for skipped_bits in 0..*packet_length {
-            let packet = &self.0[skipped_bits..];
+        for skipped_bits in 0..packet_length {
+            let packet = &bits[skipped_bits..];
             let version_bits = &packet[0..3];
             let type_bits = &packet[3..6];
             let header_bit_count = 6;
@@ -229,10 +233,9 @@ impl Packet {
                             let mut sub_packet_skip = 0;
 
                             loop {
-                                let inner_packet =
-                                    Packet(sub_packet_bits[sub_packet_skip..].to_vec());
+                                let inner_packet = &sub_packet_bits[sub_packet_skip..];
 
-                                let interpreted_inner = inner_packet.decode()?;
+                                let interpreted_inner = Packet::decode_bits(inner_packet)?;
 
                                 match interpreted_inner {
                                     DecodedPacket::Literal {
