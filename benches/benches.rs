@@ -32,6 +32,10 @@ fn day_16_part_2(i: &day_16::DecodedPacket) -> usize {
     i.run().unwrap_or(0)
 }
 
+fn day_17_part_2(i: &day_17::Input) -> usize {
+    i.distinct_velocities_that_hit_target()
+}
+
 fn criterion_benchmark(c: &mut Criterion) {
     let day_12_input = day_12::parse(day_12::INPUT).expect("Should parse Day 12 fine");
     let day_13_input = day_13::parse(day_13::INPUT).expect("Should parse Day 13 fine");
@@ -44,6 +48,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         .packet
         .decode()
         .expect("Should decode Day 16 input fine");
+    let day_17_input = day_17::parse(day_17::INPUT).expect("Should parse Day 17 fine");
 
     c.bench_function("Day 12 Part 2", |b| {
         b.iter(|| day_12_part_2(black_box(&day_12_input)))
@@ -71,6 +76,10 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function("Day 16 Part 2", |b| {
         b.iter(|| day_16_part_2(black_box(&day_16_input_decoded)))
+    });
+
+    c.bench_function("Day 17 Part 2", |b| {
+        b.iter(|| day_17_part_2(black_box(&day_17_input)))
     });
 }
 
