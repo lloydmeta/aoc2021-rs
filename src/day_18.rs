@@ -1,15 +1,16 @@
 use std::num::ParseIntError;
+use std::ops::Add;
 use std::result::Result as StdResult;
 
 use anyhow::Result;
 use combine::parser::char::*;
 use combine::*;
-
-use crate::common::usize_parser;
 use itertools::Either;
 use itertools::Either::*;
-use std::ops::Add;
+
 use PairTree::*;
+
+use crate::common::usize_parser;
 
 pub const INPUT: &str = include_str!("../data/day_18_input");
 
@@ -46,70 +47,67 @@ impl PairTree {
         }
     }
 
-    fn reduce(self) -> PairTree {
-        match self.explode().right_and_then(|p| p.split()) {
-            Left(new) => new.reduce(),
-            Right(no_change) => no_change,
+    /// 1. Explode
+    /// 2. Split
+    ///
+    /// If there are any changes at any step (false), invoke reduce again, otherwise advance
+    fn reduce(&mut self) {
+        match self.explode() {
+            false => self.reduce(),
+            true => match self.split() {
+                false => self.reduce(),
+                true => (),
+            },
         }
     }
 
-    fn explode(self) -> Either<PairTree, PairTree> {
-        fn explode_subtree(depth: usize, p: PairTree) -> Either<SubTreeExplosionResult, PairTree> {
-            match (depth, p) {
-                (_, Num(v)) => Right(Num(v)), // Do nothing
+    fn explode(&mut self) -> bool {
+        fn explode_subtree(depth: usize, p: &mut PairTree) -> Either<SubTreeExplosionResult, ()> {
+            match (depth, &p) {
+                (_, Num(_)) => Right(()), // Do nothing
                 (depth, Pair(left, right)) => {
-                    match (*left, *right) {
+                    match (left.as_ref(), right.as_ref()) {
                         (Num(left), Num(right)) if depth >= 4 => {
-                            // Explode, return 0 as the new Tree
+                            let left_value = *left;
+                            let right_value = *right;
+                            *p = Num(0);
                             Left(SubTreeExplosionResult {
-                                pre_explosion_left: left,
-                                new_subtree: Num(0),
-                                pre_explosion_right: right,
+                                pre_explosion_left: left_value,
+                                pre_explosion_right: right_value,
                             })
                         }
-                        (left_tree, right_tree) => {
-                            // Explode left first according to instructions
-                            match explode_subtree(depth + 1, left_tree) {
-                                Left(SubTreeExplosionResult {
-                                    pre_explosion_left,
-                                    new_subtree,
-                                    pre_explosion_right,
-                                }) => {
-                                    let new_subtree = PairTree::pair(
-                                        new_subtree,
-                                        add_to_leftmost(right_tree, pre_explosion_right),
-                                    );
-                                    Left(SubTreeExplosionResult {
-                                        pre_explosion_left,
-                                        new_subtree,
-                                        pre_explosion_right: 0,
-                                    })
-                                }
-                                Right(unchanged_left) => {
-                                    match explode_subtree(depth + 1, right_tree) {
+                        _ => {
+                            // Mutation round.
+                            match p {
+                                Pair(left_tree, right_tree) => {
+                                    // Explode left first according to instructions
+                                    match explode_subtree(depth + 1, left_tree) {
                                         Left(SubTreeExplosionResult {
                                             pre_explosion_left,
-                                            new_subtree,
                                             pre_explosion_right,
                                         }) => {
-                                            let new_subtree = PairTree::pair(
-                                                add_to_rightmost(
-                                                    unchanged_left,
-                                                    pre_explosion_left,
-                                                ),
-                                                new_subtree,
-                                            );
+                                            add_to_leftmost(right_tree, pre_explosion_right);
                                             Left(SubTreeExplosionResult {
-                                                pre_explosion_left: 0,
-                                                new_subtree,
-                                                pre_explosion_right,
+                                                pre_explosion_left,
+                                                pre_explosion_right: 0,
                                             })
                                         }
-                                        Right(unchanged_right) => {
-                                            Right(PairTree::pair(unchanged_left, unchanged_right))
-                                        }
+                                        Right(()) => match explode_subtree(depth + 1, right_tree) {
+                                            Left(SubTreeExplosionResult {
+                                                pre_explosion_left,
+                                                pre_explosion_right,
+                                            }) => {
+                                                add_to_rightmost(left_tree, pre_explosion_left);
+                                                Left(SubTreeExplosionResult {
+                                                    pre_explosion_left: 0,
+                                                    pre_explosion_right,
+                                                })
+                                            }
+                                            Right(()) => Right(()),
+                                        },
                                     }
                                 }
+                                _ => unreachable!(), // already matched on Num
                             }
                         }
                     }
@@ -119,59 +117,56 @@ impl PairTree {
 
         struct SubTreeExplosionResult {
             pre_explosion_left: usize,
-            new_subtree: PairTree,
             pre_explosion_right: usize,
         }
 
-        fn add_to_leftmost(pair: PairTree, num: usize) -> PairTree {
+        fn add_to_leftmost(pair: &mut PairTree, num: usize) {
             if num != 0 {
                 match pair {
-                    Num(current) => Num(current + num),
-                    Pair(left, right) => PairTree::pair(add_to_leftmost(*left, num), *right),
+                    Num(current) => *current += num,
+                    Pair(left, _right) => add_to_leftmost(left, num),
                 }
-            } else {
-                pair
             }
         }
 
-        fn add_to_rightmost(pair: PairTree, num: usize) -> PairTree {
+        fn add_to_rightmost(pair: &mut PairTree, num: usize) {
             if num != 0 {
                 match pair {
-                    Num(current) => Num(current + num),
-                    Pair(left, right) => PairTree::pair(*left, add_to_rightmost(*right, num)),
+                    Num(current) => *current += num,
+                    Pair(_left, right) => add_to_rightmost(right, num),
                 }
-            } else {
-                pair
             }
         }
 
-        match explode_subtree(0, self) {
-            Left(SubTreeExplosionResult { new_subtree, .. }) => Left(new_subtree),
-            Right(unchanged) => Right(unchanged),
-        }
+        explode_subtree(0, self).is_right()
     }
 
-    fn split(self) -> Either<PairTree, PairTree> {
-        match self {
+    fn split(&mut self) -> bool {
+        match &self {
             Num(n) => {
-                if n >= 10 {
-                    Left(PairTree::pair(
-                        Num((n as f64 / 2f64).floor() as usize),
-                        Num((n as f64 / 2f64).ceil() as usize),
-                    ))
+                if *n >= 10 {
+                    *self = PairTree::pair(
+                        Num((*n as f64 / 2f64).floor() as usize),
+                        Num((*n as f64 / 2f64).ceil() as usize),
+                    );
+                    false
                 } else {
-                    Right(Num(n))
+                    true
                 }
             }
-            Pair(left, right) => match left.split() {
-                Left(new_left) => Left(PairTree::pair(new_left, *right)),
-                Right(unchanged_left) => match right.split() {
-                    Left(new_right) => Left(PairTree::pair(unchanged_left, new_right)),
-                    Right(unchanged_right) => {
-                        Right(PairTree::pair(unchanged_left, unchanged_right))
-                    }
-                },
-            },
+            _ => {
+                // Mutation round
+                match self {
+                    Pair(left, right) => match left.split() {
+                        false => false,
+                        true => match right.split() {
+                            false => false,
+                            true => true,
+                        },
+                    },
+                    _ => unreachable!(), // already matched on Num
+                }
+            }
         }
     }
 }
@@ -180,7 +175,9 @@ impl Add for PairTree {
     type Output = PairTree;
 
     fn add(self, rhs: Self) -> Self::Output {
-        PairTree::pair(self, rhs).reduce()
+        let mut paired = PairTree::pair(self, rhs);
+        paired.reduce();
+        paired
     }
 }
 
@@ -309,11 +306,11 @@ mod tests {
                 PairTree::pair(
                     PairTree::pair(
                         PairTree::pair(PairTree::pair(Num(9), Num(8)), Num(1)),
-                        Num(2)
+                        Num(2),
                     ),
-                    Num(3)
+                    Num(3),
                 ),
-                Num(4)
+                Num(4),
             )]),
             i
         );
@@ -327,10 +324,24 @@ mod tests {
     }
 
     #[test]
+    fn add_all_magnitude_real_test() {
+        let i = parse(INPUT).unwrap();
+        let r = add_all_magnitude(&i);
+        assert_eq!(Some(3524), r)
+    }
+
+    #[test]
     fn biggest_pair_sum_test() {
         let i = parse(TEST_INPUT_MULTI).unwrap();
         let r = biggest_pair_sum(&i);
         assert_eq!(Some(3993), r)
+    }
+
+    #[test]
+    fn biggest_pair_sum_real_test() {
+        let i = parse(INPUT).unwrap();
+        let r = biggest_pair_sum(&i);
+        assert_eq!(Some(4656), r)
     }
 
     #[test]
@@ -343,113 +354,113 @@ mod tests {
                         PairTree::pair(Num(0), PairTree::pair(Num(5), Num(8))),
                         PairTree::pair(
                             PairTree::pair(Num(1), Num(7)),
-                            PairTree::pair(Num(9), Num(6))
-                        )
+                            PairTree::pair(Num(9), Num(6)),
+                        ),
                     ),
                     PairTree::pair(
                         PairTree::pair(Num(4), PairTree::pair(Num(1), Num(2))),
-                        PairTree::pair(PairTree::pair(Num(1), Num(4)), Num(2))
-                    )
+                        PairTree::pair(PairTree::pair(Num(1), Num(4)), Num(2)),
+                    ),
                 ),
                 PairTree::pair(
                     PairTree::pair(
                         PairTree::pair(Num(5), PairTree::pair(Num(2), Num(8))),
-                        Num(4)
+                        Num(4),
                     ),
                     PairTree::pair(
                         Num(5),
-                        PairTree::pair(PairTree::pair(Num(9), Num(9)), Num(0))
-                    )
+                        PairTree::pair(PairTree::pair(Num(9), Num(9)), Num(0)),
+                    ),
                 ),
                 PairTree::pair(
                     Num(6),
                     PairTree::pair(
                         PairTree::pair(
                             PairTree::pair(Num(6), Num(2)),
-                            PairTree::pair(Num(5), Num(6))
+                            PairTree::pair(Num(5), Num(6)),
                         ),
                         PairTree::pair(
                             PairTree::pair(Num(7), Num(6)),
-                            PairTree::pair(Num(4), Num(7))
-                        )
-                    )
+                            PairTree::pair(Num(4), Num(7)),
+                        ),
+                    ),
                 ),
                 PairTree::pair(
                     PairTree::pair(
                         PairTree::pair(Num(6), PairTree::pair(Num(0), Num(7))),
-                        PairTree::pair(Num(0), Num(9))
+                        PairTree::pair(Num(0), Num(9)),
                     ),
                     PairTree::pair(
                         Num(4),
-                        PairTree::pair(Num(9), PairTree::pair(Num(9), Num(0)))
-                    )
+                        PairTree::pair(Num(9), PairTree::pair(Num(9), Num(0))),
+                    ),
                 ),
                 PairTree::pair(
                     PairTree::pair(
                         PairTree::pair(Num(7), PairTree::pair(Num(6), Num(4))),
-                        PairTree::pair(Num(3), PairTree::pair(Num(1), Num(3)))
+                        PairTree::pair(Num(3), PairTree::pair(Num(1), Num(3))),
                     ),
                     PairTree::pair(
                         PairTree::pair(PairTree::pair(Num(5), Num(5)), Num(1)),
-                        Num(9)
-                    )
+                        Num(9),
+                    ),
                 ),
                 PairTree::pair(
                     PairTree::pair(
                         Num(6),
                         PairTree::pair(
                             PairTree::pair(Num(7), Num(3)),
-                            PairTree::pair(Num(3), Num(2))
-                        )
+                            PairTree::pair(Num(3), Num(2)),
+                        ),
                     ),
                     PairTree::pair(
                         PairTree::pair(
                             PairTree::pair(Num(3), Num(8)),
-                            PairTree::pair(Num(5), Num(7))
+                            PairTree::pair(Num(5), Num(7)),
                         ),
-                        Num(4)
-                    )
+                        Num(4),
+                    ),
                 ),
                 PairTree::pair(
                     PairTree::pair(
                         PairTree::pair(
                             PairTree::pair(Num(5), Num(4)),
-                            PairTree::pair(Num(7), Num(7))
+                            PairTree::pair(Num(7), Num(7)),
                         ),
-                        Num(8)
+                        Num(8),
                     ),
-                    PairTree::pair(PairTree::pair(Num(8), Num(3)), Num(8))
+                    PairTree::pair(PairTree::pair(Num(8), Num(3)), Num(8)),
                 ),
                 PairTree::pair(
                     PairTree::pair(Num(9), Num(3)),
                     PairTree::pair(
                         PairTree::pair(Num(9), Num(9)),
-                        PairTree::pair(Num(6), PairTree::pair(Num(4), Num(9)))
-                    )
+                        PairTree::pair(Num(6), PairTree::pair(Num(4), Num(9))),
+                    ),
                 ),
                 PairTree::pair(
                     PairTree::pair(
                         Num(2),
-                        PairTree::pair(PairTree::pair(Num(7), Num(7)), Num(7))
+                        PairTree::pair(PairTree::pair(Num(7), Num(7)), Num(7)),
                     ),
                     PairTree::pair(
                         PairTree::pair(Num(5), Num(8)),
                         PairTree::pair(
                             PairTree::pair(Num(9), Num(3)),
-                            PairTree::pair(Num(0), Num(2))
-                        )
-                    )
+                            PairTree::pair(Num(0), Num(2)),
+                        ),
+                    ),
                 ),
                 PairTree::pair(
                     PairTree::pair(
                         PairTree::pair(PairTree::pair(Num(5), Num(2)), Num(5)),
-                        PairTree::pair(Num(8), PairTree::pair(Num(3), Num(7)))
+                        PairTree::pair(Num(8), PairTree::pair(Num(3), Num(7))),
                     ),
                     PairTree::pair(
                         PairTree::pair(Num(5), PairTree::pair(Num(7), Num(5))),
-                        PairTree::pair(Num(4), Num(4))
-                    )
-                )
+                        PairTree::pair(Num(4), Num(4)),
+                    ),
+                ),
             ]),
             i
         );
