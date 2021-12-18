@@ -8,6 +8,7 @@ use combine::*;
 use crate::common::usize_parser;
 use itertools::Either;
 use itertools::Either::*;
+use std::ops::Add;
 use PairTree::*;
 
 pub const INPUT: &str = include_str!("../data/day_18_input");
@@ -16,9 +17,9 @@ pub fn run() -> Result<()> {
     println!("*** Day 18: Snailfish ***");
     println!("Input: {}", INPUT);
     let input = parse(INPUT)?;
-    let sol_1 = add_all_magnitude(&input.0);
+    let sol_1 = add_all_magnitude(&input);
     println!("Solution 1: {:?}", sol_1);
-    let sol_2 = biggest_pair_sum(&input.0);
+    let sol_2 = biggest_pair_sum(&input);
     println!("Solution 2: {:?}", sol_2);
 
     Ok(())
@@ -38,48 +39,37 @@ impl PairTree {
         Pair(Box::new(first), Box::new(second))
     }
 
-    fn explode(&self) -> Either<PairTree, PairTree> {
-        struct SubTreeExplosionResult {
-            pre_explosion_left: usize,
-            new_subtree: PairTree,
-            pre_explosion_right: usize,
+    fn magnitude(&self) -> usize {
+        match self {
+            Num(n) => *n,
+            Pair(left, right) => 3 * left.magnitude() + 2 * right.magnitude(),
         }
-        fn add_to_left_most(pair: &PairTree, num: usize) -> PairTree {
-            match pair {
-                Num(current) => Num(current + num),
-                Pair(left, right) => {
-                    PairTree::pair(add_to_left_most(left, num), (*right.as_ref()).clone())
-                }
-            }
-        }
-        fn add_to_right_most(pair: &PairTree, num: usize) -> PairTree {
-            match pair {
-                Num(current) => Num(current + num),
-                Pair(left, right) => {
-                    PairTree::pair((*left.as_ref()).clone(), add_to_right_most(right, num))
-                }
-            }
-        }
+    }
 
-        fn explode_as_needed(
-            depth: usize,
-            p: &PairTree,
-        ) -> Either<SubTreeExplosionResult, PairTree> {
+    fn reduce(self) -> PairTree {
+        match self.explode().right_and_then(|p| p.split()) {
+            Left(new) => new.reduce(),
+            Right(no_change) => no_change,
+        }
+    }
+
+    fn explode(self) -> Either<PairTree, PairTree> {
+        fn explode_subtree(depth: usize, p: PairTree) -> Either<SubTreeExplosionResult, PairTree> {
             match (depth, p) {
-                (_, Num(v)) => Right(Num(*v)), // Do nothing
-                (depth, Pair(ref left, ref right)) => {
-                    match (left.as_ref(), right.as_ref()) {
+                (_, Num(v)) => Right(Num(v)), // Do nothing
+                (depth, Pair(left, right)) => {
+                    match (*left, *right) {
                         (Num(left), Num(right)) if depth >= 4 => {
                             // Explode, return 0 as the new Tree
                             Left(SubTreeExplosionResult {
-                                pre_explosion_left: *left,
+                                pre_explosion_left: left,
                                 new_subtree: Num(0),
-                                pre_explosion_right: *right,
+                                pre_explosion_right: right,
                             })
                         }
-                        (left_pair, right_pair) => {
+                        (left_tree, right_tree) => {
                             // Explode left first according to instructions
-                            match explode_as_needed(depth + 1, left_pair) {
+                            match explode_subtree(depth + 1, left_tree) {
                                 Left(SubTreeExplosionResult {
                                     pre_explosion_left,
                                     new_subtree,
@@ -87,34 +77,39 @@ impl PairTree {
                                 }) => {
                                     let new_subtree = PairTree::pair(
                                         new_subtree,
-                                        add_to_left_most(right_pair, pre_explosion_right),
+                                        add_to_leftmost(right_tree, pre_explosion_right),
                                     );
                                     Left(SubTreeExplosionResult {
                                         pre_explosion_left,
                                         new_subtree,
-                                        pre_explosion_right: 0, // no need to add anything to parent trees
+                                        pre_explosion_right: 0,
                                     })
                                 }
-                                _ => match explode_as_needed(depth + 1, right_pair) {
-                                    Left(SubTreeExplosionResult {
-                                        pre_explosion_left,
-                                        new_subtree,
-                                        pre_explosion_right,
-                                    }) => {
-                                        let new_subtree = PairTree::pair(
-                                            add_to_right_most(left_pair, pre_explosion_left),
-                                            new_subtree,
-                                        );
+                                Right(unchanged_left) => {
+                                    match explode_subtree(depth + 1, right_tree) {
                                         Left(SubTreeExplosionResult {
-                                            pre_explosion_left: 0,
+                                            pre_explosion_left,
                                             new_subtree,
                                             pre_explosion_right,
-                                        })
+                                        }) => {
+                                            let new_subtree = PairTree::pair(
+                                                add_to_rightmost(
+                                                    unchanged_left,
+                                                    pre_explosion_left,
+                                                ),
+                                                new_subtree,
+                                            );
+                                            Left(SubTreeExplosionResult {
+                                                pre_explosion_left: 0,
+                                                new_subtree,
+                                                pre_explosion_right,
+                                            })
+                                        }
+                                        Right(unchanged_right) => {
+                                            Right(PairTree::pair(unchanged_left, unchanged_right))
+                                        }
                                     }
-                                    _ => {
-                                        Right(PairTree::pair(left_pair.clone(), right_pair.clone()))
-                                    }
-                                },
+                                }
                             }
                         }
                     }
@@ -122,76 +117,91 @@ impl PairTree {
             }
         }
 
-        match explode_as_needed(0, self) {
+        struct SubTreeExplosionResult {
+            pre_explosion_left: usize,
+            new_subtree: PairTree,
+            pre_explosion_right: usize,
+        }
+
+        fn add_to_leftmost(pair: PairTree, num: usize) -> PairTree {
+            if num != 0 {
+                match pair {
+                    Num(current) => Num(current + num),
+                    Pair(left, right) => PairTree::pair(add_to_leftmost(*left, num), *right),
+                }
+            } else {
+                pair
+            }
+        }
+
+        fn add_to_rightmost(pair: PairTree, num: usize) -> PairTree {
+            if num != 0 {
+                match pair {
+                    Num(current) => Num(current + num),
+                    Pair(left, right) => PairTree::pair(*left, add_to_rightmost(*right, num)),
+                }
+            } else {
+                pair
+            }
+        }
+
+        match explode_subtree(0, self) {
             Left(SubTreeExplosionResult { new_subtree, .. }) => Left(new_subtree),
-            Right(not_exploded) => Right(not_exploded),
+            Right(unchanged) => Right(unchanged),
         }
     }
 
-    fn reduce(&self) -> PairTree {
-        match self.explode().right_and_then(|p| p.split()) {
-            Left(new) => new.reduce(),
-            Right(no_change) => no_change,
-        }
-    }
-
-    fn magnitude(&self) -> usize {
-        match self {
-            Num(n) => *n,
-            Pair(left, ref right) => 3 * left.magnitude() + 2 * right.magnitude(),
-        }
-    }
-
-    fn split(&self) -> Either<PairTree, PairTree> {
+    fn split(self) -> Either<PairTree, PairTree> {
         match self {
             Num(n) => {
-                if *n >= 10 {
+                if n >= 10 {
                     Left(PairTree::pair(
-                        Num((*n as f64 / 2f64).floor() as usize),
-                        Num((*n as f64 / 2f64).ceil() as usize),
+                        Num((n as f64 / 2f64).floor() as usize),
+                        Num((n as f64 / 2f64).ceil() as usize),
                     ))
                 } else {
-                    Right(Num(*n))
+                    Right(Num(n))
                 }
             }
-            Pair(left, ref right) => match left.split() {
-                Left(new_left) => Left(PairTree::pair(new_left, (*right.as_ref()).clone())),
-                _ => match right.split() {
-                    Left(new_right) => Left(PairTree::pair((*left.as_ref()).clone(), new_right)),
-                    _ => Right(PairTree::pair(
-                        (*left.as_ref()).clone(),
-                        (*right.as_ref()).clone(),
-                    )),
+            Pair(left, right) => match left.split() {
+                Left(new_left) => Left(PairTree::pair(new_left, *right)),
+                Right(unchanged_left) => match right.split() {
+                    Left(new_right) => Left(PairTree::pair(unchanged_left, new_right)),
+                    Right(unchanged_right) => {
+                        Right(PairTree::pair(unchanged_left, unchanged_right))
+                    }
                 },
             },
         }
     }
 }
 
-fn add_fish(left: &PairTree, right: &PairTree) -> PairTree {
-    PairTree::pair(left.clone(), right.clone()).reduce()
+impl Add for PairTree {
+    type Output = PairTree;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        PairTree::pair(self, rhs).reduce()
+    }
 }
 
-fn add_all_magnitude(pair_trees: &[PairTree]) -> Option<usize> {
-    let t = pair_trees.to_vec().into_iter().reduce(|acc, next| {
-        let added = add_fish(&acc, &next);
-        added.reduce()
-    });
-    t.map(|p| p.magnitude())
+fn add_all_magnitude(input: &Input) -> Option<usize> {
+    let final_tree = input.0.clone().into_iter().reduce(|acc, next| acc + next);
+    final_tree.map(|p| p.magnitude())
 }
 
-fn biggest_pair_sum(pair_trees: &[PairTree]) -> Option<usize> {
+pub fn biggest_pair_sum(input: &Input) -> Option<usize> {
+    let pair_trees = &input.0;
     pair_trees
         .iter()
         .flat_map(|first_pair| {
-            pair_trees
-                .iter()
-                .filter(move |pair| *first_pair != **pair)
-                .map(move |second_pair| {
-                    let added = add_fish(first_pair, second_pair);
-                    let reduced = added.reduce();
-                    reduced.magnitude()
-                })
+            pair_trees.iter().filter_map(move |second_pair| {
+                if first_pair != second_pair {
+                    let added = first_pair.clone() + second_pair.clone();
+                    Some(added.magnitude())
+                } else {
+                    None
+                }
+            })
         })
         .max()
 }
@@ -310,16 +320,16 @@ mod tests {
     }
 
     #[test]
-    fn sol_1_test() {
+    fn add_all_magnitude_test() {
         let i = parse(TEST_INPUT_MULTI).unwrap();
-        let r = add_all_magnitude(&i.0);
+        let r = add_all_magnitude(&i);
         assert_eq!(Some(4140), r)
     }
 
     #[test]
-    fn sol_2_test() {
+    fn biggest_pair_sum_test() {
         let i = parse(TEST_INPUT_MULTI).unwrap();
-        let r = biggest_pair_sum(&i.0);
+        let r = biggest_pair_sum(&i);
         assert_eq!(Some(3993), r)
     }
 
