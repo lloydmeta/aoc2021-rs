@@ -47,20 +47,21 @@ impl PairTree {
         }
     }
 
+    /// "Reduces" the [PairTree] using the following steps
+    ///
     /// 1. Explode
     /// 2. Split
     ///
-    /// If there are any changes at any step (false), invoke reduce again, otherwise advance
+    /// If there are any changes at any step (returns false), repeat, otherwise exit.
     fn reduce(&mut self) {
-        match self.explode() {
-            false => self.reduce(),
-            true => match self.split() {
-                false => self.reduce(),
-                true => (),
-            },
+        loop {
+            if self.explode() && self.split() {
+                break;
+            }
         }
     }
 
+    /// Returns true if no changes, false otherwise
     fn explode(&mut self) -> bool {
         fn explode_subtree(depth: usize, p: &mut PairTree) -> Either<SubTreeExplosionResult, ()> {
             match (depth, &p) {
@@ -77,7 +78,7 @@ impl PairTree {
                             })
                         }
                         _ => {
-                            // Mutation round.
+                            // Recursion round, ugly because we can't destructure Box'ed things (yet)
                             match p {
                                 Pair(left_tree, right_tree) => {
                                     // Explode left first according to instructions
@@ -142,8 +143,8 @@ impl PairTree {
     }
 
     fn split(&mut self) -> bool {
-        match &self {
-            Num(n) => {
+        match self {
+            Num(ref n) => {
                 if *n >= 10 {
                     *self = PairTree::pair(
                         Num((*n as f64 / 2f64).floor() as usize),
@@ -154,19 +155,7 @@ impl PairTree {
                     true
                 }
             }
-            _ => {
-                // Mutation round
-                match self {
-                    Pair(left, right) => match left.split() {
-                        false => false,
-                        true => match right.split() {
-                            false => false,
-                            true => true,
-                        },
-                    },
-                    _ => unreachable!(), // already matched on Num
-                }
-            }
+            Pair(left, right) => left.split() && right.split(),
         }
     }
 }
