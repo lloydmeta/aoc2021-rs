@@ -1,6 +1,6 @@
 use std::collections::{HashSet, VecDeque};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use combine::parser::char::*;
 use combine::*;
 use itertools::Itertools;
@@ -14,7 +14,7 @@ pub fn run() -> Result<()> {
     println!("*** Day 19: Beacon Scanner ***");
     println!("Input: {}", INPUT);
     let input = parse(INPUT)?;
-    let map = input.build_map().unwrap();
+    let map = input.build_map().context("Failed to build map")?;
     let sol_1 = map.beacons.len();
     println!("Solution 1: {:?}", sol_1);
     let sol_2 = map.max_distance_between_scanners();
@@ -33,17 +33,11 @@ impl Input {
                 scanners: vec![Point { x: 0, y: 0, z: 0 }],
                 beacons: first.beacons.clone(),
             };
-            let mut unmapped_scanners = self
-                .0
-                .iter()
-                .skip(1)
-                .map(|scanner| scanner.idx)
-                .collect::<VecDeque<_>>();
-
-            while let Some(next_scanner_idx) = unmapped_scanners.pop_front() {
-                if let Some(scanner) = self.0.get(next_scanner_idx) {
+            let mut unmapped_scanner_indices = (1..self.0.len()).collect::<VecDeque<_>>();
+            while let Some(scanner_idx) = unmapped_scanner_indices.pop_front() {
+                if let Some(scanner) = self.0.get(scanner_idx) {
                     if !scanner.merge_into(&mut map) {
-                        unmapped_scanners.push_back(next_scanner_idx);
+                        unmapped_scanner_indices.push_back(scanner_idx); // Revisit
                     }
                 }
             }
@@ -52,13 +46,6 @@ impl Input {
             None
         }
     }
-}
-
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Ord, PartialOrd)]
-pub struct Point {
-    x: isize,
-    y: isize,
-    z: isize,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -79,69 +66,79 @@ impl Map {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Ord, PartialOrd)]
+pub struct Point {
+    x: isize,
+    y: isize,
+    z: isize,
+}
+
 impl Point {
-    /// Relativises the target against self
-    fn relativise(&self, target: &Point) -> Point {
-        Point {
-            x: target.x - self.x,
-            y: target.y - self.y,
-            z: target.z - self.z,
-        }
-    }
-
-    /// Resolves the target against self
-    fn resolve(&self, target: &Point) -> Point {
-        Point {
-            x: target.x + self.x,
-            y: target.y + self.y,
-            z: target.z + self.z,
-        }
-    }
-
-    /// Returns different perspectives of self.
+    /// Returns different perspectives of self given a perspective index from 0-23.
     ///
-    /// Hard-coded Because I'm an idiot and don't want to do matrix stuff or pull in a lib.
+    /// If the idx provide is higher than that range, just returns self.
+    ///
+    /// Hard-coded Because I'm an idiot and don't want to do matrix stuff or pull in a lib
     #[allow(clippy::redundant_field_names)]
-    fn different_perspectives(&self) -> [Point; 24] {
+    fn perspective_at_idx(&self, idx: usize) -> Point {
         let Point { x, y, z } = *self;
-        [
-            Point { x: x, y: y, z: z },
-            Point { x: x, y: z, z: -y },
-            Point { x: x, y: -y, z: -z },
-            Point { x: x, y: -z, z: y },
-            Point { x: y, y: x, z: -z },
-            Point { x: y, y: z, z: x },
-            Point { x: y, y: -x, z: z },
-            Point { x: y, y: -z, z: -x },
-            Point { x: z, y: x, z: y },
-            Point { x: z, y: y, z: -x },
-            Point { x: z, y: -x, z: -y },
-            Point { x: z, y: -y, z: x },
-            Point { x: -x, y: y, z: -z },
-            Point { x: -x, y: z, z: y },
-            Point { x: -x, y: -y, z: z },
-            Point {
+        match idx {
+            0 => Point { x: x, y: y, z: z },
+            1 => Point { x: x, y: z, z: -y },
+            2 => Point { x: x, y: -y, z: -z },
+            3 => Point { x: x, y: -z, z: y },
+            4 => Point { x: y, y: x, z: -z },
+            5 => Point { x: y, y: z, z: x },
+            6 => Point { x: y, y: -x, z: z },
+            7 => Point { x: y, y: -z, z: -x },
+            8 => Point { x: z, y: x, z: y },
+            9 => Point { x: z, y: y, z: -x },
+            10 => Point { x: z, y: -x, z: -y },
+            11 => Point { x: z, y: -y, z: x },
+            12 => Point { x: -x, y: y, z: -z },
+            13 => Point { x: -x, y: z, z: y },
+            14 => Point { x: -x, y: -y, z: z },
+            15 => Point {
                 x: -x,
                 y: -z,
                 z: -y,
             },
-            Point { x: -y, y: x, z: z },
-            Point { x: -y, y: z, z: -x },
-            Point {
+            16 => Point { x: -y, y: x, z: z },
+            17 => Point { x: -y, y: z, z: -x },
+            18 => Point {
                 x: -y,
                 y: -x,
                 z: -z,
             },
-            Point { x: -y, y: -z, z: x },
-            Point { x: -z, y: x, z: -y },
-            Point { x: -z, y: y, z: x },
-            Point { x: -z, y: -x, z: y },
-            Point {
+            19 => Point { x: -y, y: -z, z: x },
+            20 => Point { x: -z, y: x, z: -y },
+            21 => Point { x: -z, y: y, z: x },
+            22 => Point { x: -z, y: -x, z: y },
+            23 => Point {
                 x: -z,
                 y: -y,
                 z: -x,
             },
-        ]
+            _ => *self,
+        }
+    }
+
+    /// Relativises the given point against self
+    fn relativise(&self, p: &Point) -> Point {
+        Point {
+            x: p.x - self.x,
+            y: p.y - self.y,
+            z: p.z - self.z,
+        }
+    }
+
+    /// Anchors the give pont against self
+    fn anchor(&self, p: &Point) -> Point {
+        Point {
+            x: p.x + self.x,
+            y: p.y + self.y,
+            z: p.z + self.z,
+        }
     }
 }
 
@@ -151,20 +148,13 @@ pub struct Scanner {
     beacons: HashSet<Point>,
 }
 
-#[derive(Debug, Eq, PartialEq)]
-struct MergedScannerRelativePosition(Point);
-
 impl Scanner {
     fn different_perspectives(&self) -> impl Iterator<Item = Scanner> + '_ {
-        let beacons_perspectives: Vec<_> = self
-            .beacons
-            .iter()
-            .map(|b| b.different_perspectives())
-            .collect();
-        (0..24).map(move |persp_ix| {
-            let beacons_at_perspective = beacons_perspectives
+        (0..24).map(move |p_idx| {
+            let beacons_at_perspective = self
+                .beacons
                 .iter()
-                .map(|point_perspectives| point_perspectives[persp_ix])
+                .map(|p| p.perspective_at_idx(p_idx))
                 .collect();
             Scanner {
                 idx: self.idx,
@@ -173,37 +163,39 @@ impl Scanner {
         })
     }
 
-    /// Attempts to merge this [Scanner] into the provided target Beacon points; returns false
-    /// if there were not enough overlaps found despite rotating between all perspectives of self
-    /// and relative positions, true otherwise.
+    /// Attempts to merge this [Scanner] into the provided Map
+    ///
+    /// Returns false if there were not enough overlaps found despite rotating between all
+    /// perspectives of self and relative positions, true otherwise.
     fn merge_into(&self, map: &mut Map) -> bool {
         for self_perspective in self.different_perspectives() {
-            for target_beacon in map.beacons.iter() {
-                let target_beacons_relative_to_single_target_beacon = map
+            for map_anchor_beacon in map.beacons.iter() {
+                let map_beacons_relative_to_map_anchor_beacon = map
                     .beacons
                     .iter()
-                    .map(|p| target_beacon.relativise(p))
+                    .map(|p| map_anchor_beacon.relativise(p))
                     .collect::<HashSet<_>>();
-                for self_beacon in &self_perspective.beacons {
-                    let self_beacons_relative_to_single_self_beacon = self_perspective
+                for self_anchor_beacon in &self_perspective.beacons {
+                    let self_beacons_relative_to_self_anchor_beacon = self_perspective
                         .beacons
                         .iter()
-                        .map(|p| self_beacon.relativise(p))
+                        .map(|p| self_anchor_beacon.relativise(p))
                         .collect::<HashSet<_>>();
-                    let overlaps = self_beacons_relative_to_single_self_beacon
-                        .intersection(&target_beacons_relative_to_single_target_beacon)
+                    let overlaps = map_beacons_relative_to_map_anchor_beacon
+                        .intersection(&self_beacons_relative_to_self_anchor_beacon)
                         .count();
                     if overlaps >= MIN_OVERLAPS {
-                        let scanner_relative_to_target = self_beacon.relativise(target_beacon);
-                        let self_beacons_resolved_to_target_beacon =
-                            self_beacons_relative_to_single_self_beacon
+                        let self_perspective_relative_to_map_anchor =
+                            self_anchor_beacon.relativise(map_anchor_beacon);
+                        let self_beacons_anchored_to_map_anchor =
+                            self_beacons_relative_to_self_anchor_beacon
                                 .iter()
-                                .map(|p| target_beacon.resolve(p))
+                                .map(|p| map_anchor_beacon.anchor(p))
                                 .collect::<Vec<_>>();
-                        for beacon in self_beacons_resolved_to_target_beacon {
+                        for beacon in self_beacons_anchored_to_map_anchor {
                             map.beacons.insert(beacon);
                         }
-                        map.scanners.push(scanner_relative_to_target);
+                        map.scanners.push(self_perspective_relative_to_map_anchor);
                         return true;
                     }
                 }
@@ -391,8 +383,8 @@ mod tests {
     fn different_perspectives_test() {
         let p = Point { x: 1, y: 2, z: 3 };
 
-        let r = p.different_perspectives();
-        let distincts: Vec<_> = r.iter().unique().collect();
+        let r = (0..24).map(|idx| p.perspective_at_idx(idx));
+        let distincts: Vec<_> = r.unique().collect();
         assert_eq!(24, distincts.len())
     }
 
