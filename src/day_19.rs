@@ -397,6 +397,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(not(feature = "slow_tests"), ignore)]
     fn build_map_real_test() {
         let i = parse(INPUT).unwrap();
         let r = i.build_map().unwrap();
