@@ -316,17 +316,13 @@ mod tests {
 
         let r = image.get_algo_index_for_pixel_at(Coords { row: 0, col: 0 });
         assert_eq!(
-            to_decimal(&vec![
-                false, false, false, false, true, false, false, true, false,
-            ]),
+            to_decimal(&[false, false, false, false, true, false, false, true, false,]),
             r
         );
         // upper left corner only
         let r = image.get_algo_index_for_pixel_at(Coords { row: -1, col: -1 });
         assert_eq!(
-            to_decimal(&vec![
-                false, false, false, false, false, false, false, false, true,
-            ]),
+            to_decimal(&[false, false, false, false, false, false, false, false, true,]),
             r
         ); // just the dot in the upper left
 
