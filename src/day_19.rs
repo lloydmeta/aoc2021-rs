@@ -397,6 +397,15 @@ mod tests {
     }
 
     #[test]
+    fn build_map_real_test() {
+        let i = parse(INPUT).unwrap();
+        let r = i.build_map().unwrap();
+
+        assert_eq!(438, r.beacons.len());
+        assert_eq!(Some(11985), r.max_distance_between_scanners());
+    }
+
+    #[test]
     fn build_map_test() {
         let i = parse(TEST_INPUT).unwrap();
         let r = i.build_map().unwrap();
