@@ -32,7 +32,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --release
+          args: --features slow_tests --release
 
   fmt:
     name: Rustfmt
