@@ -40,6 +40,10 @@ fn day_18_part_2(i: &day_18::Input) -> usize {
     day_18::biggest_pair_sum(i).unwrap_or(0)
 }
 
+fn day_19_map_building(i: &day_19::Input) -> usize {
+    i.build_map().map(|m| m.scanners.len()).unwrap_or(0)
+}
+
 fn criterion_benchmark(c: &mut Criterion) {
     let day_12_input = day_12::parse(day_12::INPUT).expect("Should parse Day 12 fine");
     let day_13_input = day_13::parse(day_13::INPUT).expect("Should parse Day 13 fine");
@@ -54,6 +58,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         .expect("Should decode Day 16 input fine");
     let day_17_input = day_17::parse(day_17::INPUT).expect("Should parse Day 17 fine");
     let day_18_input = day_18::parse(day_18::INPUT).expect("Should parse Day 18 fine");
+    let day_19_input = day_19::parse(day_19::INPUT).expect("Should parse Day 19 fine");
 
     c.bench_function("Day 12 Part 2", |b| {
         b.iter(|| day_12_part_2(black_box(&day_12_input)))
@@ -89,6 +94,10 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function("Day 18 Part 2", |b| {
         b.iter(|| day_18_part_2(black_box(&day_18_input)))
+    });
+
+    c.bench_function("Day 19 Part 2", |b| {
+        b.iter(|| day_19_map_building(black_box(&day_19_input)))
     });
 }
 
